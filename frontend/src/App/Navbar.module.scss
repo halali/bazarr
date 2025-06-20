@@ -54,3 +54,35 @@
     color: var(--mantine-color-gray-5);
   }
 }
+
+// Notification positioning styles
+:global {
+  .mantine-Notifications-root {
+    // Desktop: position within sidebar
+    @media (min-width: 768px) {
+      left: 12px !important;
+      bottom: 12px !important;
+      width: 176px !important;
+      max-width: 176px !important;
+    }
+
+    // Mobile: when sidebar is collapsed, position normally
+    @media (max-width: 767px) {
+      left: 12px !important;
+      bottom: 12px !important;
+      width: calc(100vw - 24px) !important;
+      max-width: 400px !important;
+    }
+  }
+
+  .mantine-Notifications-notification {
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+
+    // Ensure notifications don't exceed sidebar width
+    @media (min-width: 768px) {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+  }
+}
