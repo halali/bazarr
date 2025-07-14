@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  bazarr-autosubsync:
+    build:
+      context: .
+      dockerfile: Dockerfile.autosubsync
+    container_name: bazarr-autosubsync-test
+    restart: unless-stopped
+    ports:
+      - "6767:6767"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bratislava
+      - BAZARR_CONFIG_DIR=/config
+      - BAZARR_LOG_DIR=/logs
+    volumes:
+      # Config and logs
+      - ./docker-data/config:/config
+      - ./docker-data/logs:/logs
+      
+      # Media directories (optional - mount your real media here)
+      - ./docker-data/movies:/movies
+      - ./docker-data/tv:/tv
+      
+      # Test media (optional - for testing purposes)
+      - ./test-media:/test-media
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - bazarr-network
+
+  # Optional: Add a simple file server for testing
+  test-media-server:
+    image: nginx:alpine
+    container_name: test-media-server
+    ports:
+      - "8080:80"
+    volumes:
+      - ./test-media:/usr/share/nginx/html
+    networks:
+      - bazarr-network
+
+networks:
+  bazarr-network:
+    driver: bridge
+
+# Optional volumes for persistent data
+volumes:
+  bazarr-config:
+  bazarr-logs:

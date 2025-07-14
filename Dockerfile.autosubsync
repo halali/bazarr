@@ -1,0 +1,46 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install AutoSubSync
+RUN pip install --no-cache-dir autosubsync
+
+# Copy Bazarr application
+COPY . .
+
+# Create config and log directories
+RUN mkdir -p /config /logs /movies /tv
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV BAZARR_CONFIG_DIR=/config
+ENV BAZARR_LOG_DIR=/logs
+
+# Create a test user
+RUN useradd -m -u 1000 bazarr && \
+    chown -R bazarr:bazarr /app /config /logs /movies /tv
+
+USER bazarr
+
+# Expose port
+EXPOSE 6767
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:6767/api/system/status || exit 1
+
+# Start Bazarr
+CMD ["python3", "bazarr.py", "--no-update", "--config", "/config"]
