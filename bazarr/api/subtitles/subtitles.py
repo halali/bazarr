@@ -11,6 +11,7 @@ from languages.get_languages import alpha3_from_alpha2
 from utilities.path_mappings import path_mappings
 from utilities.video_analyzer import subtitles_sync_references
 from subtitles.tools.subsyncer import SubSyncer
+from subtitles.tools.autosubsyncer import AutoSubSyncer
 from subtitles.tools.translate import translate_subtitles_file
 from subtitles.tools.mods import subtitles_apply_mods
 from subtitles.indexer.series import store_subtitles
@@ -155,19 +156,46 @@ class Subtitles(Resource):
                 'gss': args.get('gss') == 'True',
             }
 
-            subsync = SubSyncer()
-            try:
-                if media_type == 'episode':
-                    sync_kwargs['sonarr_series_id'] = metadata.sonarrSeriesId
-                    sync_kwargs['sonarr_episode_id'] = id
-                else:
-                    sync_kwargs['radarr_id'] = id
-                subsync.sync(**sync_kwargs)
-            except OSError:
-                return 'Unable to edit subtitles file. Check logs.', 409
-            finally:
-                del subsync
-                gc.collect()
+            # Get sync method from settings
+            sync_method = getattr(settings.subsync, 'sync_method', 'ffsubsync')
+            
+            if sync_method == 'autosubsync':
+                # Use AutoSubSyncer
+                autosubsync = AutoSubSyncer()
+                auto_sync_kwargs = {
+                    'video_path': sync_kwargs['video_path'],
+                    'srt_path': sync_kwargs['srt_path'],
+                    'srt_lang': sync_kwargs['srt_lang'],
+                    'hi': sync_kwargs['hi'],
+                    'forced': sync_kwargs['forced'],
+                }
+                try:
+                    if media_type == 'episode':
+                        auto_sync_kwargs['sonarr_series_id'] = metadata.sonarrSeriesId
+                        auto_sync_kwargs['sonarr_episode_id'] = id
+                    else:
+                        auto_sync_kwargs['radarr_id'] = id
+                    autosubsync.sync(**auto_sync_kwargs)
+                except OSError:
+                    return 'Unable to edit subtitles file. Check logs.', 409
+                finally:
+                    del autosubsync
+                    gc.collect()
+            else:
+                # Use original SubSyncer (ffsubsync)
+                subsync = SubSyncer()
+                try:
+                    if media_type == 'episode':
+                        sync_kwargs['sonarr_series_id'] = metadata.sonarrSeriesId
+                        sync_kwargs['sonarr_episode_id'] = id
+                    else:
+                        sync_kwargs['radarr_id'] = id
+                    subsync.sync(**sync_kwargs)
+                except OSError:
+                    return 'Unable to edit subtitles file. Check logs.', 409
+                finally:
+                    del subsync
+                    gc.collect()
         elif action == 'translate':
             from_language = subtitles_lang_from_filename(subtitles_path)
             dest_language = language

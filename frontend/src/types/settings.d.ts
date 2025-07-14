@@ -115,11 +115,12 @@ declare namespace Settings {
   }
 
   interface Subsync {
-    use_subsync: boolean;
-    use_subsync_threshold: boolean;
-    subsync_threshold: number;
-    use_subsync_movie_threshold: boolean;
-    subsync_movie_threshold: number;
+  use_subsync: boolean;
+  use_subsync_threshold: boolean;
+  subsync_threshold: number;
+  use_subsync_movie_threshold: boolean;
+  subsync_movie_threshold: number;
+  sync_method: string;
     debug: boolean;
     force_audio: boolean;
     max_offset_seconds: number;

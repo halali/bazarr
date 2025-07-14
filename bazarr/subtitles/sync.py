@@ -8,6 +8,7 @@ import os
 from app.config import settings
 from app.event_handler import show_progress, hide_progress
 from subtitles.tools.subsyncer import SubSyncer
+from subtitles.tools.autosubsyncer import AutoSubSyncer
 
 
 def sync_subtitles(video_path, srt_path, srt_lang, forced, hi, percent_score, sonarr_series_id=None,
@@ -27,38 +28,74 @@ def sync_subtitles(video_path, srt_path, srt_lang, forced, hi, percent_score, so
             subsync_threshold = settings.subsync.subsync_movie_threshold
 
         if not use_subsync_threshold or (use_subsync_threshold and percent_score < float(subsync_threshold)):
-            subsync = SubSyncer()
-            sync_kwargs = {
-                'video_path': video_path,
-                'srt_path': srt_path,
-                'srt_lang': srt_lang,
-                'forced': forced,
-                'hi': hi,
-                'max_offset_seconds': str(settings.subsync.max_offset_seconds),
-                'no_fix_framerate': settings.subsync.no_fix_framerate,
-                'gss': settings.subsync.gss,
-                'reference': None,  # means choose automatically within video file
-                'sonarr_series_id': sonarr_series_id,
-                'sonarr_episode_id': sonarr_episode_id,
-                'radarr_id': radarr_id,
-            }
-            subtitles_filename = os.path.basename(srt_path)
-            show_progress(id=f'subsync_{subtitles_filename}',
-                          header='Syncing Subtitle',
-                          name=srt_path,
-                          value=0,
-                          count=1)
-            try:
-                subsync.sync(**sync_kwargs)
-            except Exception:
-                hide_progress(id=f'subsync_{subtitles_filename}')
-            else:
-                show_progress(id=f'subsync_{subtitles_filename}',
-                              header='Syncing Subtitle',
+            # Determine which sync method to use
+            sync_method = getattr(settings.subsync, 'sync_method', 'ffsubsync')
+            
+            if sync_method == 'autosubsync':
+                # Use AutoSubSyncer
+                autosubsync = AutoSubSyncer()
+                sync_kwargs = {
+                    'video_path': video_path,
+                    'srt_path': srt_path,
+                    'srt_lang': srt_lang,
+                    'forced': forced,
+                    'hi': hi,
+                    'sonarr_series_id': sonarr_series_id,
+                    'sonarr_episode_id': sonarr_episode_id,
+                    'radarr_id': radarr_id,
+                }
+                subtitles_filename = os.path.basename(srt_path)
+                show_progress(id=f'autosubsync_{subtitles_filename}',
+                              header='Syncing Subtitle (AutoSubSync)',
                               name=srt_path,
-                              value=1,
+                              value=0,
                               count=1)
-            del subsync
+                try:
+                    autosubsync.sync(**sync_kwargs)
+                except Exception:
+                    hide_progress(id=f'autosubsync_{subtitles_filename}')
+                else:
+                    show_progress(id=f'autosubsync_{subtitles_filename}',
+                                  header='Syncing Subtitle (AutoSubSync)',
+                                  name=srt_path,
+                                  value=1,
+                                  count=1)
+                del autosubsync
+            else:
+                # Use original SubSyncer (ffsubsync)
+                subsync = SubSyncer()
+                sync_kwargs = {
+                    'video_path': video_path,
+                    'srt_path': srt_path,
+                    'srt_lang': srt_lang,
+                    'forced': forced,
+                    'hi': hi,
+                    'max_offset_seconds': str(settings.subsync.max_offset_seconds),
+                    'no_fix_framerate': settings.subsync.no_fix_framerate,
+                    'gss': settings.subsync.gss,
+                    'reference': None,  # means choose automatically within video file
+                    'sonarr_series_id': sonarr_series_id,
+                    'sonarr_episode_id': sonarr_episode_id,
+                    'radarr_id': radarr_id,
+                }
+                subtitles_filename = os.path.basename(srt_path)
+                show_progress(id=f'subsync_{subtitles_filename}',
+                              header='Syncing Subtitle (FFSubSync)',
+                              name=srt_path,
+                              value=0,
+                              count=1)
+                try:
+                    subsync.sync(**sync_kwargs)
+                except Exception:
+                    hide_progress(id=f'subsync_{subtitles_filename}')
+                else:
+                    show_progress(id=f'subsync_{subtitles_filename}',
+                                  header='Syncing Subtitle (FFSubSync)',
+                                  name=srt_path,
+                                  value=1,
+                                  count=1)
+                del subsync
+            
             gc.collect()
             return True
         else:
