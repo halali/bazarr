@@ -1,10 +1,10 @@
 #!/bin/bash
-# Docker test script for AutoSubSync integration with Bazarr
 
+# Docker testing script for Bazarr AutoSubSync integration
 set -e
 
-echo "🐳 Testing AutoSubSync integration in Docker"
-echo "=============================================="
+echo "🐳 Bazarr AutoSubSync Docker Test Script"
+echo "========================================"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,194 +30,143 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Cleanup function
-cleanup() {
-    print_status "Cleaning up Docker containers..."
-    docker-compose -f docker-compose.autosubsync.yml down --remove-orphans 2>/dev/null || true
-}
-
-# Set trap for cleanup on script exit
-trap cleanup EXIT
-
 # Check if Docker is running
 if ! docker info >/dev/null 2>&1; then
-    print_error "Docker is not running. Please start Docker and try again."
+    print_error "Docker is not running! Please start Docker first."
     exit 1
 fi
 
 print_success "Docker is running"
 
 # Check if docker-compose is available
-if ! command -v docker-compose &> /dev/null; then
-    print_error "docker-compose is not installed. Please install it and try again."
-    exit 1
+if ! command -v docker-compose >/dev/null 2>&1; then
+    print_warning "docker-compose not found, trying docker compose..."
+    COMPOSE_CMD="docker compose"
+else
+    COMPOSE_CMD="docker-compose"
 fi
 
-print_success "docker-compose is available"
+# Create test media directory
+mkdir -p test_media
+print_status "Created test_media directory"
 
-# Create necessary directories
-print_status "Creating test directories..."
-mkdir -p docker-data/{config,logs,movies,tv}
-mkdir -p test-media
-
-# Create test media files if they don't exist
-print_status "Creating test media files..."
-
-# Create a simple test subtitle file
-cat > test-media/test_movie.srt << 'EOF'
-1
-00:00:01,000 --> 00:00:05,000
-This is a test subtitle line one.
-
-2
-00:00:06,000 --> 00:00:10,000
-This is a test subtitle line two.
-
-3
-00:00:11,000 --> 00:00:15,000
-AutoSubSync integration testing.
-EOF
-
-# Create a dummy video file (minimal MP4 header)
-if [ ! -f "test-media/test_movie.mp4" ]; then
-    print_status "Creating dummy video file..."
-    # Create a minimal valid MP4 file using ffmpeg if available
-    if command -v ffmpeg &> /dev/null; then
-        ffmpeg -f lavfi -i testsrc=duration=30:size=320x240:rate=1 -f lavfi -i sine=frequency=1000:duration=30 \
-               -c:v libx264 -c:a aac -shortest test-media/test_movie.mp4 -y 2>/dev/null || {
-            print_warning "Could not create video file with ffmpeg, creating dummy file"
-            echo "dummy video content" > test-media/test_movie.mp4
-        }
+# Function to run integration test
+test_integration() {
+    print_status "Running AutoSubSync integration test..."
+    
+    if $COMPOSE_CMD --profile test run --rm bazarr-test; then
+        print_success "Integration test passed!"
+        return 0
     else
-        echo "dummy video content" > test-media/test_movie.mp4
+        print_error "Integration test failed!"
+        return 1
     fi
-fi
+}
 
-print_success "Test media files created"
-
-# Build and start containers
-print_status "Building Docker image..."
-docker-compose -f docker-compose.autosubsync.yml build
-
-print_status "Starting containers..."
-docker-compose -f docker-compose.autosubsync.yml up -d
-
-# Wait for Bazarr to start
-print_status "Waiting for Bazarr to start..."
-timeout=120
-counter=0
-
-while [ $counter -lt $timeout ]; do
-    if curl -s -f http://localhost:6767/api/system/status >/dev/null 2>&1; then
-        break
+# Function to build and start Bazarr
+start_bazarr() {
+    print_status "Building Bazarr with AutoSubSync..."
+    
+    if $COMPOSE_CMD build bazarr-autosubsync; then
+        print_success "Build completed successfully"
+    else
+        print_error "Build failed!"
+        exit 1
     fi
-    sleep 2
-    counter=$((counter + 2))
-    echo -n "."
-done
+    
+    print_status "Starting Bazarr container..."
+    $COMPOSE_CMD up -d bazarr-autosubsync
+    
+    print_status "Waiting for Bazarr to start..."
+    sleep 10
+    
+    # Check if container is running
+    if docker ps | grep -q bazarr-autosubsync-test; then
+        print_success "Bazarr is running!"
+        print_status "🌐 Access Bazarr at: http://localhost:6767"
+        print_status "⚙️  Go to Settings → Subtitles to configure AutoSubSync"
+        
+        # Show logs
+        echo ""
+        print_status "Container logs:"
+        $COMPOSE_CMD logs --tail=20 bazarr-autosubsync
+    else
+        print_error "Failed to start Bazarr container"
+        $COMPOSE_CMD logs bazarr-autosubsync
+        exit 1
+    fi
+}
 
-echo ""
+# Function to stop containers
+stop_containers() {
+    print_status "Stopping containers..."
+    $COMPOSE_CMD down
+    print_success "Containers stopped"
+}
 
-if [ $counter -ge $timeout ]; then
-    print_error "Bazarr failed to start within $timeout seconds"
-    docker-compose -f docker-compose.autosubsync.yml logs bazarr-autosubsync
-    exit 1
-fi
+# Function to show logs
+show_logs() {
+    print_status "Showing Bazarr logs..."
+    $COMPOSE_CMD logs -f bazarr-autosubsync
+}
 
-print_success "Bazarr is running"
+# Function to show help
+show_help() {
+    echo "Usage: $0 [COMMAND]"
+    echo ""
+    echo "Commands:"
+    echo "  test     - Run integration test only"
+    echo "  start    - Build and start Bazarr with AutoSubSync"
+    echo "  stop     - Stop all containers"
+    echo "  logs     - Show container logs"
+    echo "  restart  - Restart containers"
+    echo "  clean    - Stop containers and remove volumes"
+    echo "  help     - Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 test          # Run integration test"
+    echo "  $0 start         # Start Bazarr"
+    echo "  $0 logs          # Watch logs"
+    echo "  $0 stop          # Stop everything"
+}
 
-# Test AutoSubSync availability in container
-print_status "Testing AutoSubSync availability in container..."
-if docker exec bazarr-autosubsync-test python3 -c "
-import autosubsync
-print('AutoSubSync version:', getattr(autosubsync, '__version__', 'unknown'))
-" 2>/dev/null; then
-    print_success "AutoSubSync is available in container"
-else
-    print_error "AutoSubSync is not available in container"
-    docker-compose -f docker-compose.autosubsync.yml logs bazarr-autosubsync
-    exit 1
-fi
-
-# Test FFmpeg availability
-print_status "Testing FFmpeg availability in container..."
-if docker exec bazarr-autosubsync-test ffmpeg -version >/dev/null 2>&1; then
-    print_success "FFmpeg is available in container"
-else
-    print_error "FFmpeg is not available in container"
-    exit 1
-fi
-
-# Test Bazarr API
-print_status "Testing Bazarr API..."
-if api_response=$(curl -s http://localhost:6767/api/system/status 2>/dev/null); then
-    print_success "Bazarr API is responding"
-    echo "API Response: $api_response"
-else
-    print_error "Bazarr API is not responding"
-    exit 1
-fi
-
-# Test if AutoSubSync integration is working
-print_status "Testing AutoSubSync integration..."
-if docker exec bazarr-autosubsync-test python3 -c "
-import sys
-sys.path.append('/app')
-sys.path.append('/app/bazarr')
-
-try:
-    from bazarr.subtitles.tools.autosubsyncer import AutoSubSyncer
-    syncer = AutoSubSyncer()
-    print('AutoSubSyncer class imported successfully')
-    print('Log directory:', syncer.log_dir_path)
-except Exception as e:
-    print('Error importing AutoSubSyncer:', e)
-    sys.exit(1)
-" 2>/dev/null; then
-    print_success "AutoSubSync integration is working"
-else
-    print_error "AutoSubSync integration failed"
-    docker-compose -f docker-compose.autosubsync.yml logs bazarr-autosubsync
-    exit 1
-fi
-
-# Display useful information
-echo ""
-print_success "🎉 AutoSubSync integration test completed successfully!"
-echo ""
-echo "📋 Test Results:"
-echo "✅ Docker containers are running"
-echo "✅ Bazarr is accessible at http://localhost:6767"
-echo "✅ AutoSubSync library is installed"
-echo "✅ FFmpeg is available"
-echo "✅ AutoSubSync integration class is working"
-echo "✅ Test media server at http://localhost:8080"
-echo ""
-echo "🔧 Next steps:"
-echo "1. Open Bazarr at http://localhost:6767"
-echo "2. Go to Settings → Subtitles"
-echo "3. Enable 'Automatic Subtitles Audio Synchronization'"
-echo "4. Select 'AutoSubSync' from 'Sync Method' dropdown"
-echo "5. Test with real media files"
-echo ""
-echo "📊 Container logs:"
-echo "docker-compose -f docker-compose.autosubsync.yml logs -f bazarr-autosubsync"
-echo ""
-echo "🛑 To stop containers:"
-echo "docker-compose -f docker-compose.autosubsync.yml down"
-
-# Keep containers running
-print_status "Containers will continue running. Press Ctrl+C to stop them."
-print_status "You can now test AutoSubSync in Bazarr at http://localhost:6767"
-
-# Optional: Open browser if available
-if command -v xdg-open &> /dev/null; then
-    print_status "Opening Bazarr in browser..."
-    xdg-open http://localhost:6767 2>/dev/null &
-elif command -v open &> /dev/null; then
-    print_status "Opening Bazarr in browser..."
-    open http://localhost:6767 2>/dev/null &
-fi
-
-# Wait for user input to stop
-read -p "Press Enter to stop containers and cleanup..."
+# Main script logic
+case "${1:-start}" in
+    "test")
+        print_status "Running integration test..."
+        if $COMPOSE_CMD build bazarr-test; then
+            test_integration
+        else
+            print_error "Failed to build test container"
+            exit 1
+        fi
+        ;;
+    "start")
+        start_bazarr
+        ;;
+    "stop")
+        stop_containers
+        ;;
+    "logs")
+        show_logs
+        ;;
+    "restart")
+        stop_containers
+        sleep 2
+        start_bazarr
+        ;;
+    "clean")
+        print_status "Cleaning up containers and volumes..."
+        $COMPOSE_CMD down -v
+        docker system prune -f
+        print_success "Cleanup completed"
+        ;;
+    "help"|"-h"|"--help")
+        show_help
+        ;;
+    *)
+        print_error "Unknown command: $1"
+        show_help
+        exit 1
+        ;;
+esac
