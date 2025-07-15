@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  bazarr-autosubsync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bazarr-autosubsync-test
+    ports:
+      - "6767:6767"
+    volumes:
+      # Persistent data
+      - bazarr_config:/app/data/config
+      - bazarr_cache:/app/data/cache
+      - bazarr_logs:/app/data/log
+      # Test media (mount your test files here)
+      - ./test_media:/test_media
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bratislava
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Test container for running integration tests
+  bazarr-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bazarr-integration-test
+    volumes:
+      - ./test_media:/test_media
+    environment:
+      - PYTHONPATH=/app
+    command: ["/app/start.sh", "test"]
+    profiles:
+      - test
+
+volumes:
+  bazarr_config:
+    driver: local
+  bazarr_cache:
+    driver: local
+  bazarr_logs:
+    driver: local

@@ -1,0 +1,70 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+docs/
+screenshot/
+
+# Development
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.coverage
+.tox/
+venv/
+env/
+
+# Test data
+test-media/
+docker-data/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Node.js (if any)
+node_modules/
+npm-debug.log
+
+# Build artifacts
+dist/
+build/
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Local config that shouldn't be in container
+config.yaml
+*.local.yml
+
+# GitHub
+.github/

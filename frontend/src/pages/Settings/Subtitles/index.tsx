@@ -422,6 +422,19 @@ const SettingsSubtitlesView: FunctionComponent = () => {
             options={providerOptions}
             settingKey="settings-subsync-checker-blacklisted_providers"
           ></MultiSelector>
+          <Selector
+            label="Sync Method"
+            settingKey="settings-subsync-sync_method"
+            options={[
+              { label: "FFsubsync", value: "ffsubsync" },
+              { label: "AutoSubSync", value: "autosubsync" },
+            ]}
+          />
+          <Message>
+            Choose the synchronization method. FFsubsync uses WebRTC VAD for speech detection. 
+            AutoSubSync uses machine learning for better accuracy but requires the autosubsync 
+            Python package to be installed.
+          </Message>
           <Check label="Debug" settingKey="settings-subsync-debug"></Check>
           <Message>
             Do not actually sync the subtitles but generate a .tar.gz file to be
